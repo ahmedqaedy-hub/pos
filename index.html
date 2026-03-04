@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ريم الخليج - نظام محاسبي متكامل</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/dexie/dist/dexie.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;900&display=swap');
@@ -34,7 +33,36 @@
         tr.hover\:bg-slate-50:hover { transform: scale(1.005); transition: all 0.2s; }
         
         @media print {
+            @page { size: A4; margin: 10mm; }
+            html, body {
+                width: 100% !important;
+                height: auto !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                overflow: visible !important;
+                background: #fff !important;
+            }
+            #app > * { display: none !important; }
+            #modal-container,
+            #modal-content,
+            #printable-area {
+                display: block !important;
+                visibility: visible !important;
+                position: static !important;
+                inset: auto !important;
+                width: 100% !important;
+                max-width: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                overflow: visible !important;
+                box-shadow: none !important;
+                border: none !important;
+                background: #fff !important;
+            }
+            #modal-container.hidden { display: block !important; }
             .no-print { display: none !important; }
+            table { border-spacing: 0 !important; border-collapse: collapse !important; }
+            tr, td, th { page-break-inside: avoid; }
         }
     </style>
 </head>
@@ -92,8 +120,14 @@
                     <a href="#" onclick="showSection('expenses')" class="nav-item flex items-center gap-4 p-4 rounded-2xl hover:bg-slate-800 hover:text-white transition">
                         <i class="fas fa-wallet w-6 text-rose-400"></i> <span class="font-bold">المصاريف</span>
                     </a>
+                    <a href="#" onclick="showSection('treasury')" class="nav-item flex items-center gap-4 p-4 rounded-2xl hover:bg-slate-800 hover:text-white transition">
+                        <i class="fas fa-cash-register w-6 text-emerald-300"></i> <span class="font-bold">الخزينة</span>
+                    </a>
                     <a href="#" onclick="showSection('projects')" class="nav-item flex items-center gap-4 p-4 rounded-2xl hover:bg-slate-800 hover:text-white transition">
                         <i class="fas fa-project-diagram w-6 text-indigo-400"></i> <span class="font-bold">المشاريع</span>
+                    </a>
+                    <a href="#" onclick="showSection('contracts')" class="nav-item flex items-center gap-4 p-4 rounded-2xl hover:bg-slate-800 hover:text-white transition">
+                        <i class="fas fa-file-signature w-6 text-teal-400"></i> <span class="font-bold">العقود</span>
                     </a>
                     <a href="#" onclick="showSection('maintenance')" class="nav-item flex items-center gap-4 p-4 rounded-2xl hover:bg-slate-800 hover:text-white transition">
                         <i class="fas fa-tools w-6 text-cyan-400"></i> <span class="font-bold">الصيانات</span>
@@ -116,6 +150,7 @@
                     <div class="flex items-center gap-4">
                         <button id="open-sidebar" class="md:hidden p-3 bg-slate-50 rounded-xl text-slate-600"><i class="fas fa-bars"></i></button>
                         <h2 id="section-title" class="text-2xl font-black text-slate-800">لوحة التحكم</h2>
+                        <button id="close-section" onclick="showSection('dashboard')" class="hidden w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400 hover:text-rose-500 transition-all shadow-sm"><i class="fas fa-times"></i></button>
                     </div>
                     <div class="flex items-center gap-4">
                         <div class="text-left hidden sm:block">
@@ -131,6 +166,15 @@
                 <div id="content-area" class="flex-1 overflow-y-auto p-4 md:p-8 space-y-8">
                     <!-- Dashboard -->
                     <div id="section-dashboard" class="space-y-8">
+                        <div class="flex flex-col md:flex-row justify-between items-center gap-4">
+                            <h3 class="text-xl font-black text-slate-700">ملخص العمليات</h3>
+                            <div class="flex items-center gap-2 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm">
+                                <input type="date" id="dash-from" class="p-2 border rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                                <span class="text-slate-400 font-bold">إلى</span>
+                                <input type="date" id="dash-to" class="p-2 border rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                                <button onclick="updateDashboard()" class="bg-slate-900 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-800 transition">تحديث</button>
+                            </div>
+                        </div>
                         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                             <div class="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200/50">
                                 <div class="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mb-4"><i class="fas fa-arrow-up text-xl"></i></div>
@@ -157,12 +201,18 @@
 
                     <!-- Sales -->
                     <div id="section-sales" class="hidden space-y-6">
-                        <div class="flex justify-between items-center">
+                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                             <h3 class="text-2xl font-black">سجل المبيعات</h3>
+                            <div class="flex flex-wrap items-center gap-2 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm">
+                                <input type="date" id="sales-from" class="p-2 border rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                                <span class="text-slate-400 font-bold">إلى</span>
+                                <input type="date" id="sales-to" class="p-2 border rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                                <button onclick="renderSales()" class="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-blue-700 transition">بحث</button>
+                            </div>
                             <button onclick="openInvoiceModal('sale')" class="bg-blue-900 text-white px-8 py-4 rounded-2xl font-black shadow-lg shadow-blue-900/20 hover:scale-105 transition">+ فاتورة مبيعات</button>
                         </div>
-                        <div class="bg-white rounded-3xl shadow-sm overflow-hidden border border-slate-200">
-                            <table class="w-full text-right">
+                        <div class="bg-white rounded-3xl shadow-sm overflow-x-auto border border-slate-200">
+                            <table class="w-full min-w-[980px] text-right">
                                 <thead class="bg-slate-50 text-slate-500 uppercase text-xs font-black">
                                     <tr><th class="p-6">الرقم</th><th class="p-6">التاريخ</th><th class="p-6">العميل</th><th class="p-6 text-center">الإجمالي</th><th class="p-6"></th></tr>
                                 </thead>
@@ -173,8 +223,14 @@
 
                     <!-- Purchases -->
                     <div id="section-purchases" class="hidden space-y-6">
-                        <div class="flex justify-between items-center">
+                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                             <h3 class="text-2xl font-black">سجل المشتريات</h3>
+                            <div class="flex flex-wrap items-center gap-2 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm">
+                                <input type="date" id="purchases-from" class="p-2 border rounded-xl text-sm focus:ring-2 focus:ring-amber-500 outline-none">
+                                <span class="text-slate-400 font-bold">إلى</span>
+                                <input type="date" id="purchases-to" class="p-2 border rounded-xl text-sm focus:ring-2 focus:ring-amber-500 outline-none">
+                                <button onclick="renderPurchases()" class="bg-amber-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-amber-700 transition">بحث</button>
+                            </div>
                             <button onclick="openInvoiceModal('purchase')" class="bg-amber-600 text-white px-8 py-4 rounded-2xl font-black shadow-lg shadow-amber-600/20 hover:scale-105 transition">+ فاتورة مشتريات</button>
                         </div>
                         <div class="bg-white rounded-3xl shadow-sm overflow-hidden border border-slate-200">
@@ -189,8 +245,14 @@
 
                     <!-- Returns -->
                     <div id="section-returns" class="hidden space-y-6">
-                        <div class="flex justify-between items-center">
+                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                             <h3 class="text-2xl font-black">المرتجعات</h3>
+                            <div class="flex flex-wrap items-center gap-2 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm">
+                                <input type="date" id="returns-from" class="p-2 border rounded-xl text-sm focus:ring-2 focus:ring-orange-500 outline-none">
+                                <span class="text-slate-400 font-bold">إلى</span>
+                                <input type="date" id="returns-to" class="p-2 border rounded-xl text-sm focus:ring-2 focus:ring-orange-500 outline-none">
+                                <button onclick="renderReturns()" class="bg-orange-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-orange-700 transition">بحث</button>
+                            </div>
                             <button onclick="openReturnModal()" class="bg-orange-600 text-white px-8 py-4 rounded-2xl font-black shadow-lg shadow-orange-600/20 hover:scale-105 transition">+ فاتورة مرتجع</button>
                         </div>
                         <div class="bg-white rounded-3xl shadow-sm overflow-hidden border border-slate-200">
@@ -221,8 +283,14 @@
 
                     <!-- Expenses -->
                     <div id="section-expenses" class="hidden space-y-6">
-                        <div class="flex justify-between items-center">
+                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                             <h3 class="text-2xl font-black">المصاريف</h3>
+                            <div class="flex flex-wrap items-center gap-2 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm">
+                                <input type="date" id="expenses-from" class="p-2 border rounded-xl text-sm focus:ring-2 focus:ring-rose-500 outline-none">
+                                <span class="text-slate-400 font-bold">إلى</span>
+                                <input type="date" id="expenses-to" class="p-2 border rounded-xl text-sm focus:ring-2 focus:ring-rose-500 outline-none">
+                                <button onclick="renderExpenses()" class="bg-rose-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-rose-700 transition">بحث</button>
+                            </div>
                             <button onclick="openExpenseModal()" class="bg-rose-600 text-white px-8 py-4 rounded-2xl font-black shadow-lg shadow-rose-600/20 hover:scale-105 transition">+ تسجيل مصروف</button>
                         </div>
                         <div class="bg-white rounded-3xl shadow-sm overflow-hidden border border-slate-200">
@@ -235,10 +303,55 @@
                         </div>
                     </div>
 
+                    <!-- Treasury -->
+                    <div id="section-treasury" class="hidden space-y-6">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div class="bg-white rounded-3xl border border-slate-200 p-6">
+                                <p class="text-sm text-slate-500 font-bold">الرصيد التشغيلي</p>
+                                <p id="treasury-operational" class="text-3xl font-black text-blue-900 mt-2">0.00</p>
+                            </div>
+                            <div class="bg-white rounded-3xl border border-slate-200 p-6">
+                                <p class="text-sm text-slate-500 font-bold">الحركات اليدوية</p>
+                                <p id="treasury-manual" class="text-3xl font-black text-emerald-600 mt-2">0.00</p>
+                            </div>
+                            <div class="bg-slate-900 rounded-3xl border border-slate-800 p-6">
+                                <p class="text-sm text-slate-300 font-bold">رصيد الخزينة الحالي</p>
+                                <p id="treasury-balance" class="text-3xl font-black text-white mt-2">0.00</p>
+                            </div>
+                        </div>
+                        <div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-6">
+                            <h3 class="text-xl font-black mb-4">إضافة حركة خزينة</h3>
+                            <form id="treasury-form" class="grid grid-cols-1 md:grid-cols-4 gap-3">
+                                <input type="date" id="treasury-date" class="p-3 border rounded-xl" required>
+                                <select id="treasury-type" class="p-3 border rounded-xl" required>
+                                    <option value="in">إيداع</option>
+                                    <option value="out">سحب</option>
+                                </select>
+                                <input type="number" id="treasury-amount" min="0" step="0.01" placeholder="المبلغ" class="p-3 border rounded-xl" required>
+                                <input type="text" id="treasury-note" placeholder="البيان" class="p-3 border rounded-xl">
+                                <button type="submit" class="md:col-span-4 bg-emerald-600 text-white py-3 rounded-xl font-black hover:bg-emerald-700 transition">حفظ الحركة</button>
+                            </form>
+                        </div>
+                        <div class="bg-white rounded-3xl shadow-sm overflow-hidden border border-slate-200">
+                            <table class="w-full text-right">
+                                <thead class="bg-slate-50 text-slate-500 uppercase text-xs font-black">
+                                    <tr><th class="p-6">التاريخ</th><th class="p-6">النوع</th><th class="p-6 text-center">المبلغ</th><th class="p-6">البيان</th><th class="p-6 text-center"></th></tr>
+                                </thead>
+                                <tbody id="treasury-list" class="divide-y divide-slate-100"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
                     <!-- Projects -->
                     <div id="section-projects" class="hidden space-y-6">
-                        <div class="flex justify-between items-center">
+                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                             <h3 class="text-2xl font-black">إدارة المشاريع</h3>
+                            <div class="flex flex-wrap items-center gap-2 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm">
+                                <input type="date" id="projects-from" class="p-2 border rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+                                <span class="text-slate-400 font-bold">إلى</span>
+                                <input type="date" id="projects-to" class="p-2 border rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+                                <button onclick="renderProjects()" class="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-700 transition">بحث</button>
+                            </div>
                             <button onclick="openProjectModal()" class="bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black shadow-lg shadow-indigo-600/20 hover:scale-105 transition">+ مشروع جديد</button>
                         </div>
                         <div class="bg-white rounded-3xl shadow-sm overflow-hidden border border-slate-200">
@@ -251,10 +364,43 @@
                         </div>
                     </div>
 
+                    <!-- Contracts -->
+                    <div id="section-contracts" class="hidden space-y-6">
+                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                            <h3 class="text-2xl font-black">إبرام العقود</h3>
+                            <div class="flex flex-wrap items-center gap-2 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm">
+                                <input type="date" id="contracts-from" class="p-2 border rounded-xl text-sm focus:ring-2 focus:ring-teal-500 outline-none">
+                                <span class="text-slate-400 font-bold">إلى</span>
+                                <input type="date" id="contracts-to" class="p-2 border rounded-xl text-sm focus:ring-2 focus:ring-teal-500 outline-none">
+                                <select id="contracts-status" class="p-2 border rounded-xl text-sm focus:ring-2 focus:ring-teal-500 outline-none">
+                                    <option value="all">كل الحالات</option>
+                                    <option value="in_progress">قيد الإنشاء</option>
+                                    <option value="completed">تم التنفيذ</option>
+                                </select>
+                                <button onclick="renderContracts()" class="bg-teal-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-teal-700 transition">بحث</button>
+                            </div>
+                            <button onclick="openContractModal()" class="bg-teal-700 text-white px-8 py-4 rounded-2xl font-black shadow-lg shadow-teal-700/20 hover:scale-105 transition">+ عقد جديد</button>
+                        </div>
+                        <div class="bg-white rounded-3xl shadow-sm overflow-hidden border border-slate-200">
+                            <table class="w-full text-right">
+                                <thead class="bg-slate-50 text-slate-500 uppercase text-xs font-black">
+                                    <tr><th class="p-6">الرقم</th><th class="p-6">التاريخ</th><th class="p-6">العميل</th><th class="p-6 text-center">الإجمالي</th><th class="p-6 text-center">المقدم</th><th class="p-6 text-center">المتبقي</th><th class="p-6 text-center">الحالة</th><th class="p-6 text-center">العمليات</th></tr>
+                                </thead>
+                                <tbody id="contracts-list" class="divide-y divide-slate-100"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
                     <!-- Maintenance -->
                     <div id="section-maintenance" class="hidden space-y-6">
-                        <div class="flex justify-between items-center">
+                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                             <h3 class="text-2xl font-black">سجل الصيانات</h3>
+                            <div class="flex flex-wrap items-center gap-2 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm">
+                                <input type="date" id="maint-from" class="p-2 border rounded-xl text-sm focus:ring-2 focus:ring-cyan-500 outline-none">
+                                <span class="text-slate-400 font-bold">إلى</span>
+                                <input type="date" id="maint-to" class="p-2 border rounded-xl text-sm focus:ring-2 focus:ring-cyan-500 outline-none">
+                                <button onclick="renderMaintenances()" class="bg-cyan-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-cyan-700 transition">بحث</button>
+                            </div>
                             <button onclick="openMaintenanceModal()" class="bg-cyan-600 text-white px-8 py-4 rounded-2xl font-black shadow-lg shadow-cyan-600/20 hover:scale-105 transition">+ صيانة جديدة</button>
                         </div>
                         <div class="bg-white rounded-3xl shadow-sm overflow-hidden border border-slate-200">
@@ -289,14 +435,19 @@
 
     <!-- Universal Modal Container -->
     <div id="modal-container" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm hidden">
-        <div id="modal-content" class="bg-white w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-[2.5rem] shadow-2xl relative">
-            <!-- Content Injected via JS -->
+        <div class="relative w-full max-w-4xl">
+            <button onclick="closeModal()" class="absolute -top-3 -right-3 md:-top-4 md:-right-4 w-10 h-10 bg-white rounded-xl shadow-xl flex items-center justify-center text-slate-400 hover:text-rose-500 z-[60] transition-all hover:scale-110 active:scale-90 shadow-rose-500/10 border border-slate-100 no-print">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+            <div id="modal-content" class="bg-white w-full max-h-[90vh] overflow-y-auto rounded-[2.5rem] shadow-2xl relative">
+                <!-- Content Injected via JS -->
+            </div>
         </div>
     </div>
 
     <!-- Supabase SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-    <script src="app.js?v=3.2"></script>
+    <script src="app.js?v=3.5"></script>
 </body>
 </html>
