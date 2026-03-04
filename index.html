@@ -131,6 +131,9 @@
                     <a href="#" onclick="showSection('treasury')" class="nav-item flex items-center gap-4 p-4 rounded-2xl hover:bg-slate-800 hover:text-white transition">
                         <i class="fas fa-cash-register w-6 text-emerald-300"></i> <span class="font-bold">الخزينة</span>
                     </a>
+                    <a href="#" onclick="showSection('employee-advances')" class="nav-item flex items-center gap-4 p-4 rounded-2xl hover:bg-slate-800 hover:text-white transition">
+                        <i class="fas fa-hand-holding-usd w-6 text-amber-300"></i> <span class="font-bold">&#1587;&#1604;&#1601; &#1575;&#1604;&#1605;&#1608;&#1592;&#1601;&#1610;&#1606;</span>
+                    </a>
                     <a href="#" onclick="showSection('projects')" class="nav-item flex items-center gap-4 p-4 rounded-2xl hover:bg-slate-800 hover:text-white transition">
                         <i class="fas fa-project-diagram w-6 text-indigo-400"></i> <span class="font-bold">المشاريع</span>
                     </a>
@@ -346,6 +349,59 @@
                                     <tr><th class="p-6">التاريخ</th><th class="p-6">النوع</th><th class="p-6 text-center">المبلغ</th><th class="p-6">البيان</th><th class="p-6 text-center"></th></tr>
                                 </thead>
                                 <tbody id="treasury-list" class="divide-y divide-slate-100"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Employee Advances -->
+                    <div id="section-employee-advances" class="hidden space-y-6">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div class="bg-white rounded-3xl border border-slate-200 p-6">
+                                <p class="text-sm text-slate-500 font-bold">إجمالي السلف</p>
+                                <p id="adv-total-advances" class="text-3xl font-black text-amber-600 mt-2">0.00</p>
+                            </div>
+                            <div class="bg-white rounded-3xl border border-slate-200 p-6">
+                                <p class="text-sm text-slate-500 font-bold">إجمالي التسديد</p>
+                                <p id="adv-total-repayments" class="text-3xl font-black text-emerald-600 mt-2">0.00</p>
+                            </div>
+                            <div class="bg-slate-900 rounded-3xl border border-slate-800 p-6">
+                                <p class="text-sm text-slate-300 font-bold">المتبقي على الموظفين</p>
+                                <p id="adv-outstanding" class="text-3xl font-black text-white mt-2">0.00</p>
+                            </div>
+                        </div>
+
+                        <div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-6">
+                            <h3 class="text-xl font-black mb-4">تسجيل حركة سلفة</h3>
+                            <form id="employee-advance-form" class="grid grid-cols-1 md:grid-cols-5 gap-3">
+                                <input type="date" id="adv-date" class="p-3 border rounded-xl" required>
+                                <input type="text" id="adv-employee" placeholder="اسم الموظف" class="p-3 border rounded-xl" required>
+                                <select id="adv-type" class="p-3 border rounded-xl" required>
+                                    <option value="advance">سلفة</option>
+                                    <option value="repayment">تسديد</option>
+                                </select>
+                                <input type="number" id="adv-amount" min="0.01" step="0.01" placeholder="المبلغ" class="p-3 border rounded-xl" required>
+                                <input type="text" id="adv-note" placeholder="ملاحظة" class="p-3 border rounded-xl">
+                                <button type="submit" class="md:col-span-5 bg-amber-600 text-white py-3 rounded-xl font-black hover:bg-amber-700 transition">حفظ الحركة</button>
+                            </form>
+                        </div>
+
+                        <div class="bg-white rounded-3xl shadow-sm overflow-hidden border border-slate-200">
+                            <h4 class="px-6 pt-6 pb-2 text-lg font-black">كشف الموظفين</h4>
+                            <table class="w-full text-right">
+                                <thead class="bg-slate-50 text-slate-500 uppercase text-xs font-black">
+                                    <tr><th class="p-6">الموظف</th><th class="p-6 text-center">إجمالي السلف</th><th class="p-6 text-center">إجمالي التسديد</th><th class="p-6 text-center">الرصيد المتبقي</th></tr>
+                                </thead>
+                                <tbody id="adv-summary-list" class="divide-y divide-slate-100"></tbody>
+                            </table>
+                        </div>
+
+                        <div class="bg-white rounded-3xl shadow-sm overflow-hidden border border-slate-200">
+                            <h4 class="px-6 pt-6 pb-2 text-lg font-black">تفاصيل الحركات</h4>
+                            <table class="w-full text-right">
+                                <thead class="bg-slate-50 text-slate-500 uppercase text-xs font-black">
+                                    <tr><th class="p-6">التاريخ</th><th class="p-6">الموظف</th><th class="p-6">النوع</th><th class="p-6 text-center">المبلغ</th><th class="p-6">ملاحظة</th><th class="p-6 text-center"></th></tr>
+                                </thead>
+                                <tbody id="adv-transactions-list" class="divide-y divide-slate-100"></tbody>
                             </table>
                         </div>
                     </div>

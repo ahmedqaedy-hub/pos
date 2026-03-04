@@ -133,7 +133,7 @@ if (loginForm) {
 function logout() { sessionStorage.clear(); location.reload(); }
 
 function showSection(section) {
-    const sections = ['dashboard', 'sales', 'purchases', 'inventory', 'expenses', 'treasury', 'projects', 'contracts', 'reports', 'users', 'returns', 'maintenance'];
+    const sections = ['dashboard', 'sales', 'purchases', 'inventory', 'expenses', 'treasury', 'employee-advances', 'projects', 'contracts', 'reports', 'users', 'returns', 'maintenance'];
     sections.forEach(s => { const el = document.getElementById(`section-${s}`); if (el) el.classList.add('hidden'); });
     const target = document.getElementById(`section-${section}`);
     if (target) target.classList.remove('hidden');
@@ -153,6 +153,7 @@ function showSection(section) {
     if (section === 'returns') renderReturns();
     if (section === 'expenses') renderExpenses();
     if (section === 'treasury') renderTreasury();
+    if (section === 'employee-advances') renderEmployeeAdvances();
     if (section === 'projects') renderProjects();
     if (section === 'contracts') renderContracts();
     if (section === 'maintenance') renderMaintenances();
@@ -296,6 +297,7 @@ function escapeHtmlAttr(value) {
 const PROJECT_STATUS_STORAGE_KEY = 'project_status_overrides';
 const CONTRACTS_LOCAL_STORAGE_KEY = 'contracts_local_cache';
 const TREASURY_LOCAL_STORAGE_KEY = 'treasury_manual_entries';
+const EMPLOYEE_ADVANCES_LOCAL_STORAGE_KEY = 'employee_advances_local_entries';
 
 function getProjectStatusOverrides() {
     try {
@@ -388,6 +390,7 @@ function getSectionTitle(s) {
         inventory: 'Inventory',
         expenses: 'Expenses',
         treasury: 'الخزينة',
+        'employee-advances': 'سلف الموظفين',
         projects: 'Projects',
         contracts: 'Contracts',
         users: 'Users',
@@ -1785,6 +1788,7 @@ window.openUserModal = () => {
                         <label class="flex items-center gap-2 bg-slate-900/70 rounded-xl px-3 py-2"><input type="checkbox" value="inventory" class="u-perm accent-orange-500"> <span>المخزن</span></label>
                         <label class="flex items-center gap-2 bg-slate-900/70 rounded-xl px-3 py-2"><input type="checkbox" value="expenses" class="u-perm accent-orange-500"> <span>المصاريف</span></label>
                         <label class="flex items-center gap-2 bg-slate-900/70 rounded-xl px-3 py-2"><input type="checkbox" value="treasury" class="u-perm accent-orange-500"> <span>الخزينة</span></label>
+                        <label class="flex items-center gap-2 bg-slate-900/70 rounded-xl px-3 py-2"><input type="checkbox" value="employee-advances" class="u-perm accent-orange-500"> <span>سلف الموظفين</span></label>
                         <label class="flex items-center gap-2 bg-slate-900/70 rounded-xl px-3 py-2"><input type="checkbox" value="projects" class="u-perm accent-orange-500"> <span>المشاريع</span></label>
                         <label class="flex items-center gap-2 bg-slate-900/70 rounded-xl px-3 py-2"><input type="checkbox" value="contracts" class="u-perm accent-orange-500"> <span>العقود</span></label>
                         <label class="flex items-center gap-2 bg-slate-900/70 rounded-xl px-3 py-2"><input type="checkbox" value="returns" class="u-perm accent-orange-500"> <span>المرتجعات</span></label>
@@ -1898,15 +1902,30 @@ async function renderTreasury() {
         - (purchases || []).reduce((a, b) => a + safeNumber(b.total), 0)
         - (expenses || []).reduce((a, b) => a + safeNumber(b.amount), 0);
 
+    let advancesImpact = 0;
+    try {
+        const { entries: advEntries } = await fetchEmployeeAdvanceEntries();
+        const totalAdvances = (advEntries || [])
+            .filter(x => readText(x.entry_type) === 'advance')
+            .reduce((sum, x) => sum + safeNumber(x.amount), 0);
+        const totalRepayments = (advEntries || [])
+            .filter(x => readText(x.entry_type) === 'repayment')
+            .reduce((sum, x) => sum + safeNumber(x.amount), 0);
+        // Advances reduce treasury, repayments increase treasury.
+        advancesImpact = totalRepayments - totalAdvances;
+    } catch (err) {
+        advancesImpact = 0;
+    }
+
     const entries = getTreasuryEntries();
     const manual = entries.reduce((sum, item) => sum + (item.type === 'in' ? 1 : -1) * safeNumber(item.amount), 0);
-    const balance = operational + manual;
+    const balance = operational + manual + advancesImpact;
 
     const operationalEl = document.getElementById('treasury-operational');
     const manualEl = document.getElementById('treasury-manual');
     const balanceEl = document.getElementById('treasury-balance');
     if (operationalEl) operationalEl.innerText = operational.toFixed(2);
-    if (manualEl) manualEl.innerText = manual.toFixed(2);
+    if (manualEl) manualEl.innerText = (manual + advancesImpact).toFixed(2);
     if (balanceEl) balanceEl.innerText = balance.toFixed(2);
 
     const tbody = document.getElementById('treasury-list');
@@ -1956,6 +1975,167 @@ window.deleteTreasuryEntry = (id) => {
     if (!confirm('حذف الحركة؟')) return;
     const next = getTreasuryEntries().filter(item => String(item.id) !== String(id));
     setTreasuryEntries(next);
+    renderTreasury();
+};
+
+function isMissingEmployeeAdvancesTableError(error) {
+    const msg = readText(error && (error.message || error.details || error.hint)).toLowerCase();
+    const code = readText(error && error.code).toUpperCase();
+    return code === '42P01' || code === 'PGRST205' || (msg.includes('employee_advances') && (msg.includes('schema cache') || msg.includes('not find') || msg.includes('does not exist')));
+}
+
+function getEmployeeAdvancesLocalEntries() {
+    try {
+        const raw = localStorage.getItem(EMPLOYEE_ADVANCES_LOCAL_STORAGE_KEY);
+        const parsed = raw ? JSON.parse(raw) : [];
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (err) {
+        return [];
+    }
+}
+
+function setEmployeeAdvancesLocalEntries(entries) {
+    localStorage.setItem(EMPLOYEE_ADVANCES_LOCAL_STORAGE_KEY, JSON.stringify(Array.isArray(entries) ? entries : []));
+}
+
+async function fetchEmployeeAdvanceEntries() {
+    const result = await _supabase.from('employee_advances').select('*').order('entry_date', { ascending: false });
+    if (!result.error) {
+        const normalized = (result.data || []).map(row => ({
+            id: row.id,
+            entry_date: row.entry_date,
+            employee_name: readText(row.employee_name || row.employee),
+            entry_type: readText(row.entry_type || row.type) === 'repayment' ? 'repayment' : 'advance',
+            amount: safeNumber(row.amount),
+            note: readText(row.note)
+        }));
+        return { entries: normalized, source: 'supabase' };
+    }
+    if (isMissingEmployeeAdvancesTableError(result.error)) {
+        return { entries: getEmployeeAdvancesLocalEntries(), source: 'local' };
+    }
+    throw result.error;
+}
+
+async function renderEmployeeAdvances() {
+    const dateInput = document.getElementById('adv-date');
+    if (dateInput && !dateInput.value) dateInput.value = new Date().toLocaleDateString('en-CA');
+
+    let dataset = { entries: [], source: 'local' };
+    try {
+        dataset = await fetchEmployeeAdvanceEntries();
+    } catch (err) {
+        console.error(err);
+        alert(`تعذر تحميل سلف الموظفين: ${readText(err && err.message) || 'خطأ غير معروف'}`);
+        return;
+    }
+    const entries = dataset.entries || [];
+
+    const totalAdvances = entries.filter(x => x.entry_type === 'advance').reduce((s, x) => s + safeNumber(x.amount), 0);
+    const totalRepayments = entries.filter(x => x.entry_type === 'repayment').reduce((s, x) => s + safeNumber(x.amount), 0);
+    const outstanding = totalAdvances - totalRepayments;
+
+    const totalAdvancesEl = document.getElementById('adv-total-advances');
+    const totalRepaymentsEl = document.getElementById('adv-total-repayments');
+    const outstandingEl = document.getElementById('adv-outstanding');
+    if (totalAdvancesEl) totalAdvancesEl.innerText = formatAmount(totalAdvances);
+    if (totalRepaymentsEl) totalRepaymentsEl.innerText = formatAmount(totalRepayments);
+    if (outstandingEl) outstandingEl.innerText = formatAmount(outstanding);
+
+    const byEmployee = {};
+    entries.forEach(item => {
+        const emp = readText(item.employee_name) || 'غير محدد';
+        if (!byEmployee[emp]) byEmployee[emp] = { advance: 0, repayment: 0 };
+        byEmployee[emp][item.entry_type === 'repayment' ? 'repayment' : 'advance'] += safeNumber(item.amount);
+    });
+    const summaryRows = Object.keys(byEmployee).sort((a, b) => a.localeCompare(b, 'ar')).map(emp => {
+        const item = byEmployee[emp];
+        const balance = item.advance - item.repayment;
+        return `
+            <tr class="border-b border-slate-100">
+                <td class="p-5 font-bold">${escapeHtmlAttr(emp)}</td>
+                <td class="p-5 text-center text-amber-600 font-black">${formatAmount(item.advance)}</td>
+                <td class="p-5 text-center text-emerald-600 font-black">${formatAmount(item.repayment)}</td>
+                <td class="p-5 text-center font-black ${balance > 0 ? 'text-rose-600' : 'text-emerald-700'}">${formatAmount(balance)}</td>
+            </tr>
+        `;
+    }).join('');
+    const summaryTbody = document.getElementById('adv-summary-list');
+    if (summaryTbody) summaryTbody.innerHTML = summaryRows || `<tr><td class="p-5 text-center text-slate-400" colspan="4">لا توجد بيانات</td></tr>`;
+
+    const txRows = entries.map(item => `
+        <tr class="border-b border-slate-100">
+            <td class="p-5">${escapeHtmlAttr(item.entry_date || '-')}</td>
+            <td class="p-5 font-bold">${escapeHtmlAttr(item.employee_name || '-')}</td>
+            <td class="p-5 ${item.entry_type === 'repayment' ? 'text-emerald-600' : 'text-amber-600'} font-bold">${item.entry_type === 'repayment' ? 'تسديد' : 'سلفة'}</td>
+            <td class="p-5 text-center font-black">${formatAmount(item.amount)}</td>
+            <td class="p-5">${escapeHtmlAttr(item.note || '-')}</td>
+            <td class="p-5 text-center">
+                <button onclick="deleteEmployeeAdvanceEntry('${escapeHtmlAttr(String(item.id || ''))}', '${dataset.source}')" class="text-rose-500"><i class="fas fa-trash-alt"></i></button>
+            </td>
+        </tr>
+    `).join('');
+    const txTbody = document.getElementById('adv-transactions-list');
+    if (txTbody) txTbody.innerHTML = txRows || `<tr><td class="p-5 text-center text-slate-400" colspan="6">لا توجد حركات</td></tr>`;
+
+    const form = document.getElementById('employee-advance-form');
+    if (form) {
+        form.onsubmit = async (e) => {
+            e.preventDefault();
+            const payload = {
+                entry_date: readText(document.getElementById('adv-date').value) || new Date().toLocaleDateString('en-CA'),
+                employee_name: readText(document.getElementById('adv-employee').value),
+                entry_type: readText(document.getElementById('adv-type').value) === 'repayment' ? 'repayment' : 'advance',
+                amount: safeNumber(document.getElementById('adv-amount').value),
+                note: readText(document.getElementById('adv-note').value)
+            };
+            if (!payload.employee_name || payload.amount <= 0) {
+                alert('يرجى إدخال اسم الموظف والمبلغ بشكل صحيح');
+                return;
+            }
+
+            if (dataset.source === 'supabase') {
+                const { error } = await _supabase.from('employee_advances').insert([payload]);
+                if (error) {
+                    if (isMissingEmployeeAdvancesTableError(error)) {
+                        const local = getEmployeeAdvancesLocalEntries();
+                        local.push({ ...payload, id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}` });
+                        setEmployeeAdvancesLocalEntries(local);
+                    } else {
+                        console.error(error);
+                        alert(`فشل الحفظ: ${readText(error.message) || 'خطأ غير معروف'}`);
+                        return;
+                    }
+                }
+            } else {
+                const local = getEmployeeAdvancesLocalEntries();
+                local.push({ ...payload, id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}` });
+                setEmployeeAdvancesLocalEntries(local);
+            }
+
+            form.reset();
+            if (dateInput) dateInput.value = new Date().toLocaleDateString('en-CA');
+            renderEmployeeAdvances();
+            renderTreasury();
+        };
+    }
+}
+
+window.deleteEmployeeAdvanceEntry = async (id, source = 'supabase') => {
+    if (!id) return;
+    if (!confirm('حذف الحركة؟')) return;
+    if (source === 'supabase') {
+        const { error } = await _supabase.from('employee_advances').delete().eq('id', id);
+        if (error && !isMissingEmployeeAdvancesTableError(error)) {
+            console.error(error);
+            alert('تعذر حذف الحركة');
+            return;
+        }
+    } else {
+        const next = getEmployeeAdvancesLocalEntries().filter(item => String(item.id) !== String(id));
+        setEmployeeAdvancesLocalEntries(next);
+    }
+    renderEmployeeAdvances();
     renderTreasury();
 };
 
