@@ -20,6 +20,14 @@
             background-color: #f1f5f9;
             color: #1e293b;
         }
+        input, textarea, select {
+            color: #0f172a !important;
+            caret-color: #0f172a !important;
+        }
+        input::placeholder, textarea::placeholder {
+            color: #94a3b8 !important;
+            opacity: 1;
+        }
         .sidebar { transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
         @media (max-width: 768px) {
             .sidebar { transform: translateX(100%); }
@@ -357,7 +365,7 @@
                         <div class="bg-white rounded-3xl shadow-sm overflow-hidden border border-slate-200">
                             <table class="w-full text-right">
                                 <thead class="bg-slate-50 text-slate-500 uppercase text-xs font-black">
-                                    <tr><th class="p-6">المشروع</th><th class="p-6">العميل</th><th class="p-6 text-center">التكلفة</th><th class="p-6 text-center">العقد</th><th class="p-6 text-center">الربح</th><th class="p-6 text-center"></th></tr>
+                                    <tr><th class="p-6">المشروع</th><th class="p-6">العميل</th><th id="projects-cost-header" class="p-6 text-center">التكلفة</th><th class="p-6 text-center">العقد</th><th id="projects-profit-header" class="p-6 text-center">الربح</th><th class="p-6 text-center"></th></tr>
                                 </thead>
                                 <tbody id="projects-list" class="divide-y divide-slate-100"></tbody>
                             </table>

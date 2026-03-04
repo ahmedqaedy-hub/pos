@@ -41,7 +41,7 @@ function applyPermissions(user) {
         document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('hidden'));
         return;
     }
-    const perms = user.permissions || [];
+    const perms = parsePermissions(user.permissions);
     document.querySelectorAll('.nav-item').forEach(el => {
         const onClickAttr = el.getAttribute('onclick');
         if (!onClickAttr) return;
@@ -53,6 +53,41 @@ function applyPermissions(user) {
         }
     });
     document.querySelectorAll('.admin-only').forEach(el => el.classList.add('hidden'));
+}
+
+function parsePermissions(value) {
+    if (Array.isArray(value)) return value;
+    if (typeof value === 'string') {
+        const raw = value.trim();
+        if (!raw) return [];
+        try {
+            const parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed : [raw];
+        } catch (err) {
+            return [raw];
+        }
+    }
+    return [];
+}
+
+function getCurrentUser() {
+    try {
+        const raw = sessionStorage.getItem('currentUser');
+        return raw ? JSON.parse(raw) : null;
+    } catch (err) {
+        return null;
+    }
+}
+
+function isAdminUser(user = getCurrentUser()) {
+    return !!(user && readText(user.username).toLowerCase() === 'admin');
+}
+
+function canViewProfitAndCost(user = getCurrentUser()) {
+    if (!user) return false;
+    if (isAdminUser(user)) return true;
+    const perms = parsePermissions(user.permissions);
+    return perms.includes('financials');
 }
 
 function toEnglish(str) {
@@ -369,11 +404,12 @@ async function renderInventory() {
     const { data, error } = await _supabase.from('products').select('*').order('name');
     if(error) { console.error(error); return; }
     const tbody = document.getElementById('inventory-list');
+    const canViewFinancial = canViewProfitAndCost();
     if(tbody) tbody.innerHTML = data.map(p => `
         <tr class="hover:bg-slate-50 transition border-b border-slate-100">
             <td class="p-5 font-bold">${p.name}</td>
             <td class="p-5 text-center bg-blue-50 font-black">${p.quantity}</td>
-            <td class="p-5 text-center text-emerald-600">${p.buyPrice.toFixed(2)}</td>
+            <td class="p-5 text-center text-emerald-600">${canViewFinancial ? p.buyPrice.toFixed(2) : '***'}</td>
             <td class="p-5 text-center text-indigo-600">${p.sellPrice.toFixed(2)}</td>
             <td class="p-5 text-center">
                 <button onclick="deleteProduct(${p.id})" class="text-rose-500"><i class="fas fa-trash-alt"></i></button>
@@ -587,10 +623,15 @@ window.openReturnModal = async () => {
 
 // 4. Projects
 async function renderProjects() {
+    const canViewFinancial = canViewProfitAndCost();
     const statusFilterEl = ensureProjectStatusFilter();
     const statusFilter = statusFilterEl ? statusFilterEl.value : 'all';
     const opsHeader = document.querySelector('#section-projects thead tr th:last-child');
     if (opsHeader) opsHeader.textContent = 'الحالة / العمليات';
+    const costHeader = document.getElementById('projects-cost-header');
+    const profitHeader = document.getElementById('projects-profit-header');
+    if (costHeader) costHeader.classList.toggle('hidden', !canViewFinancial);
+    if (profitHeader) profitHeader.classList.toggle('hidden', !canViewFinancial);
 
     const from = document.getElementById('projects-from').value;
     const to = document.getElementById('projects-to').value;
@@ -605,22 +646,26 @@ async function renderProjects() {
         <tr class="border-b border-slate-100">
             <td class="p-5 font-bold">${readText(p.name) || '-'}</td>
             <td class="p-5">${resolvePartyName(p, ['customer'])}</td>
-            <td class="p-5 text-center text-rose-600 font-bold">${formatAmount(p.totalCosts)}</td>
+            <td class="p-5 text-center text-rose-600 font-bold ${canViewFinancial ? '' : 'hidden'}">${formatAmount(p.totalCosts)}</td>
             <td class="p-5 text-center text-blue-900 font-bold">${formatAmount(p.contractValue)}</td>
-            <td class="p-5 text-center text-emerald-600 font-black">${formatAmount(p.profit)}</td>
+            <td class="p-5 text-center text-emerald-600 font-black ${canViewFinancial ? '' : 'hidden'}">${formatAmount(p.profit)}</td>
             <td class="p-5 text-center">
                 <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-black ${projectStatusBadgeClass(resolveProjectStatus(p))}">
                     ${projectStatusLabel(resolveProjectStatus(p))}
                 </span>
-                <button onclick="openAddProjectExpenseModal(${p.id})" class="bg-rose-600 text-white px-3 py-2 rounded-xl text-xs font-bold ml-2">+ مصروف</button>
-                <button onclick="openProjectExpensesModal(${p.id})" class="bg-rose-50 text-rose-700 px-4 py-2 rounded-xl text-sm font-bold ml-2">المصاريف</button>
-                <button onclick="openProjectEditModal(${p.id})" class="bg-indigo-50 text-indigo-700 px-4 py-2 rounded-xl text-sm font-bold">تعديل</button>
+                ${canViewFinancial ? `<button onclick="openAddProjectExpenseModal(${p.id})" class="bg-rose-600 text-white px-3 py-2 rounded-xl text-xs font-bold ml-2">+ مصروف</button>` : ''}
+                ${canViewFinancial ? `<button onclick="openProjectExpensesModal(${p.id})" class="bg-rose-50 text-rose-700 px-4 py-2 rounded-xl text-sm font-bold ml-2">المصاريف</button>` : ''}
+                <button onclick="openProjectEditModal(${p.id})" class="bg-indigo-50 text-indigo-700 px-4 py-2 rounded-xl text-sm font-bold ${canViewFinancial ? '' : 'ml-2'}">تعديل</button>
             </td>
         </tr>
     `).join('');
 }
 
 window.openAddProjectExpenseModal = async (id) => {
+    if (!canViewProfitAndCost()) {
+        alert('لا تملك صلاحية عرض أو تعديل التكلفة/الربح');
+        return;
+    }
     const { data: project, error } = await _supabase.from('projects').select('*').eq('id', id).single();
     if (error || !project) {
         console.error(error);
@@ -705,6 +750,10 @@ window.openAddProjectExpenseModal = async (id) => {
 };
 
 window.openProjectEditModal = async (id) => {
+    if (!canViewProfitAndCost()) {
+        alert('لا تملك صلاحية عرض أو تعديل التكلفة/الربح');
+        return;
+    }
     const { data: project, error } = await _supabase.from('projects').select('*').eq('id', id).single();
     if (error || !project) {
         console.error(error);
@@ -804,6 +853,10 @@ window.openProjectEditModal = async (id) => {
 };
 
 window.openProjectExpensesModal = async (id) => {
+    if (!canViewProfitAndCost()) {
+        alert('لا تملك صلاحية عرض أو تعديل التكلفة/الربح');
+        return;
+    }
     const { data: project, error: projectError } = await _supabase.from('projects').select('*').eq('id', id).single();
     if (projectError || !project) {
         console.error(projectError);
@@ -883,6 +936,10 @@ window.openProjectExpensesModal = async (id) => {
 };
 
 window.openProjectModal = () => {
+    if (!canViewProfitAndCost()) {
+        alert('لا تملك صلاحية عرض أو تعديل التكلفة/الربح');
+        return;
+    }
     const modal = document.getElementById('modal-container');
     const content = document.getElementById('modal-content');
     modal.classList.remove('hidden');
@@ -1702,15 +1759,21 @@ window.openUserModal = () => {
     const modal = document.getElementById('modal-container');
     const content = document.getElementById('modal-content');
     modal.classList.remove('hidden');
-    content.innerHTML = `<div class="p-8 bg-white text-right"><h3 class="text-2xl font-black mb-6">مستخدم جديد</h3><form id="u-form" class="space-y-4"><input type="text" id="u-name" placeholder="الاسم" class="w-full p-4 border rounded-xl" required><input type="password" id="u-pass" placeholder="كلمة المرور" class="w-full p-4 border rounded-xl" required><button type="submit" class="w-full bg-slate-900 text-white py-4 rounded-xl">إنشاء</button></form></div>`;
+    content.innerHTML = `<div class="p-8 bg-white text-right"><h3 class="text-2xl font-black mb-6">مستخدم جديد</h3><form id="u-form" class="space-y-4"><input type="text" id="u-name" placeholder="الاسم" class="w-full p-4 border rounded-xl" required><input type="password" id="u-pass" placeholder="كلمة المرور" class="w-full p-4 border rounded-xl" required><div class="p-4 border rounded-xl space-y-3"><p class="font-bold text-slate-700">صلاحيات الأقسام</p><label class="flex items-center gap-2"><input type="checkbox" value="sales" class="u-perm" checked> <span>المبيعات</span></label><label class="flex items-center gap-2"><input type="checkbox" value="purchases" class="u-perm"> <span>المشتريات</span></label><label class="flex items-center gap-2"><input type="checkbox" value="inventory" class="u-perm"> <span>المخزن</span></label><label class="flex items-center gap-2"><input type="checkbox" value="expenses" class="u-perm"> <span>المصاريف</span></label><label class="flex items-center gap-2"><input type="checkbox" value="treasury" class="u-perm"> <span>الخزينة</span></label><label class="flex items-center gap-2"><input type="checkbox" value="projects" class="u-perm"> <span>المشاريع</span></label><label class="flex items-center gap-2"><input type="checkbox" value="contracts" class="u-perm"> <span>العقود</span></label><label class="flex items-center gap-2"><input type="checkbox" value="returns" class="u-perm"> <span>المرتجعات</span></label><label class="flex items-center gap-2"><input type="checkbox" value="maintenance" class="u-perm"> <span>الصيانات</span></label></div><label class="flex items-center gap-2 p-4 border rounded-xl"><input type="checkbox" id="u-financials"> <span class="font-bold text-emerald-700">السماح بعرض الربح والتكلفة</span></label><button type="submit" class="w-full bg-slate-900 text-white py-4 rounded-xl">إنشاء</button></form></div>`;
     document.getElementById('u-form').onsubmit = async (e) => {
         e.preventDefault();
         const username = document.getElementById('u-name').value.trim();
         const password = document.getElementById('u-pass').value.trim();
-        const { error } = await _supabase.from('users').insert([{ username, password, permissions: ['sales'] }]);
-        if (error) {
-            console.error(error);
-            alert('Failed to create user');
+        const permissions = Array.from(document.querySelectorAll('.u-perm:checked')).map(el => el.value);
+        if (document.getElementById('u-financials').checked) permissions.push('financials');
+
+        let result = await _supabase.from('users').insert([{ username, password, permissions }]);
+        if (result.error) {
+            result = await _supabase.from('users').insert([{ username, password, permissions: JSON.stringify(permissions) }]);
+        }
+        if (result.error) {
+            console.error(result.error);
+            alert(`Failed to create user: ${readText(result.error.message) || 'unknown error'}`);
             return;
         }
         closeModal(); renderUsers();
