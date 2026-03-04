@@ -1717,32 +1717,141 @@ window.editMaintenance = async (id) => {
 async function renderExpenses() {
     const from = document.getElementById('expenses-from').value;
     const to = document.getElementById('expenses-to').value;
+    const kind = readText(document.getElementById('expenses-kind')?.value) || 'all';
     let query = _supabase.from('expenses').select('*');
     if (from) query = query.gte('date', from);
     if (to) query = query.lte('date', to);
     const { data } = await query.order('date', { ascending: false });
+    const list = (data || []).filter(e => {
+        if (kind === 'project') return readText(e.category).startsWith('مصروف مشروع');
+        if (kind === 'daily') return !readText(e.category).startsWith('مصروف مشروع');
+        return true;
+    });
     
     const tbody = document.getElementById('expenses-list');
-    if(tbody && data) tbody.innerHTML = data.map(e => `
+    if(tbody) tbody.innerHTML = list.map(e => `
         <tr class="border-b border-slate-100">
             <td class="p-5">${e.date || '-'}</td>
             <td class="p-5">${readText(e.category) || '-'}</td>
             <td class="p-5 font-black text-rose-600">${formatAmount(e.amount)}</td>
             <td class="p-5 text-slate-500">${readText(e.description) || '-'}</td>
-            <td class="p-5 text-center"></td>
+            <td class="p-5 text-center">
+                <button onclick="deleteExpense(${e.id})" class="text-rose-500 hover:text-rose-700">
+                    <i class="fas fa-trash-alt"></i>
+                </button>
+            </td>
         </tr>
     `).join('');
 }
 
-window.openExpenseModal = () => {
+window.deleteExpense = async (id) => {
+    if (!id) return;
+    if (!confirm('حذف المصروف؟')) return;
+    const { error } = await _supabase.from('expenses').delete().eq('id', id);
+    if (error) {
+        console.error(error);
+        alert(`تعذر حذف المصروف: ${readText(error.message) || 'خطأ غير معروف'}`);
+        return;
+    }
+    renderExpenses();
+    updateDashboard();
+    renderTreasury();
+};
+
+window.openExpenseModal = async () => {
     const modal = document.getElementById('modal-container');
     const content = document.getElementById('modal-content');
+    const { data: projects } = await _supabase.from('projects').select('id,name,contractValue,totalCosts,status').order('name', { ascending: true });
+    const projectOptions = (projects || []).map(p => `<option value="${p.id}">${escapeHtmlAttr(readText(p.name) || `#${p.id}`)}</option>`).join('');
     modal.classList.remove('hidden');
-    content.innerHTML = `<div class="p-8 bg-white text-right"><h3 class="text-2xl font-black mb-6">مصروف جديد</h3><input type="text" id="e-cat" placeholder="البند" class="w-full p-4 border mb-4"><input type="number" id="e-val" placeholder="المبلغ" class="w-full p-4 border mb-4"><button onclick="saveSupabaseExpense()" class="w-full bg-rose-600 text-white py-4 rounded-xl font-bold">حفظ</button></div>`;
+    content.innerHTML = `<div class="p-8 bg-white text-right"><h3 class="text-2xl font-black mb-6">مصروف جديد</h3><select id="e-kind" class="w-full p-4 border mb-4 rounded-xl"><option value="daily">مصروف يومي</option><option value="project">مصروف مشروع</option></select><div id="e-project-wrap" class="hidden"><select id="e-project" class="w-full p-4 border mb-4 rounded-xl"><option value="">اختر المشروع</option>${projectOptions}</select></div><input type="text" id="e-cat" placeholder="البند (للمصروف اليومي)" class="w-full p-4 border mb-4"><input type="number" id="e-val" placeholder="المبلغ" class="w-full p-4 border mb-4"><textarea id="e-desc" placeholder="ملاحظات" class="w-full p-4 border mb-4 rounded-xl min-h-[110px]"></textarea><button onclick="saveSupabaseExpense()" class="w-full bg-rose-600 text-white py-4 rounded-xl font-bold">حفظ</button></div>`;
+    const kindEl = document.getElementById('e-kind');
+    const projectWrapEl = document.getElementById('e-project-wrap');
+    const categoryEl = document.getElementById('e-cat');
+    const refreshKindUI = () => {
+        const isProject = kindEl.value === 'project';
+        projectWrapEl.classList.toggle('hidden', !isProject);
+        categoryEl.disabled = isProject;
+        categoryEl.classList.toggle('bg-slate-100', isProject);
+        categoryEl.placeholder = isProject ? 'سيتم الربط تلقائيًا بالمشروع' : 'البند (للمصروف اليومي)';
+        if (isProject) categoryEl.value = '';
+    };
+    kindEl.addEventListener('change', refreshKindUI);
+    refreshKindUI();
     window.saveSupabaseExpense = async () => {
-        const e = { category: document.getElementById('e-cat').value, amount: Number(document.getElementById('e-val').value), date: new Date().toLocaleDateString('en-CA') };
-        await _supabase.from('expenses').insert([e]);
+        const kind = document.getElementById('e-kind').value;
+        const amount = Number(document.getElementById('e-val').value);
+        const description = readText(document.getElementById('e-desc').value);
+        const selectedProjectId = Number(document.getElementById('e-project').value);
+        let category = readText(document.getElementById('e-cat').value);
+
+        if (!Number.isFinite(amount) || amount <= 0) {
+            alert('أدخل مبلغ صحيح');
+            return;
+        }
+
+        if (kind === 'project') {
+            if (!Number.isFinite(selectedProjectId) || selectedProjectId <= 0) {
+                alert('اختر مشروع');
+                return;
+            }
+            category = projectExpenseCategory(selectedProjectId);
+        } else if (!category) {
+            alert('أدخل بند المصروف');
+            return;
+        }
+
+        const e = {
+            category,
+            amount,
+            description,
+            date: new Date().toLocaleDateString('en-CA')
+        };
+
+        const { error: expenseError } = await _supabase.from('expenses').insert([e]);
+        if (expenseError) {
+            console.error(expenseError);
+            alert(`تعذر حفظ المصروف: ${readText(expenseError.message) || 'خطأ غير معروف'}`);
+            return;
+        }
+
+        if (kind === 'project' && Number.isFinite(selectedProjectId) && selectedProjectId > 0) {
+            const { data: project, error: projectLoadError } = await _supabase
+                .from('projects')
+                .select('*')
+                .eq('id', selectedProjectId)
+                .maybeSingle();
+
+            if (projectLoadError || !project) {
+                console.error(projectLoadError);
+                alert('تم حفظ المصروف لكن تعذر ربطه بتكلفة المشروع');
+            } else {
+                const totalCosts = safeNumber(project.totalCosts) + amount;
+                const contractValue = safeNumber(project.contractValue);
+                const profit = contractValue - totalCosts;
+                const status = resolveProjectStatus(project);
+                let { error: projectError } = await _supabase
+                    .from('projects')
+                    .update({ totalCosts, profit, status })
+                    .eq('id', selectedProjectId);
+
+                if (projectError && isMissingStatusColumnError(projectError)) {
+                    ({ error: projectError } = await _supabase
+                        .from('projects')
+                        .update({ totalCosts, profit })
+                        .eq('id', selectedProjectId));
+                    if (!projectError) setProjectStatusOverride(selectedProjectId, status);
+                }
+                if (projectError) {
+                    console.error(projectError);
+                    alert('تم حفظ المصروف لكن تعذر تحديث إجماليات المشروع');
+                }
+            }
+        }
+
         alert("تم"); closeModal(); renderExpenses(); updateDashboard();
+        renderTreasury();
+        if (kind === 'project') renderProjects();
     };
 };
 
