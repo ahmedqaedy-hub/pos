@@ -659,10 +659,44 @@ async function renderProjects() {
                 ${canViewFinancial ? `<button onclick="openAddProjectExpenseModal(${p.id})" class="bg-rose-600 text-white px-3 py-2 rounded-xl text-xs font-bold ml-2">+ مصروف</button>` : ''}
                 ${canViewFinancial ? `<button onclick="openProjectExpensesModal(${p.id})" class="bg-rose-50 text-rose-700 px-4 py-2 rounded-xl text-sm font-bold ml-2">المصاريف</button>` : ''}
                 <button onclick="openProjectEditModal(${p.id})" class="bg-indigo-50 text-indigo-700 px-4 py-2 rounded-xl text-sm font-bold ${canViewFinancial ? '' : 'ml-2'}">تعديل</button>
+                ${canViewFinancial ? `<button onclick="deleteProject(${p.id})" class="bg-rose-50 text-rose-700 px-4 py-2 rounded-xl text-sm font-bold ml-2">حذف</button>` : ''}
             </td>
         </tr>
     `).join('');
 }
+
+window.deleteProject = async (id) => {
+    const projectId = Number(id);
+    if (!Number.isFinite(projectId)) return;
+    if (!confirm('حذف المشروع؟ سيتم حذف مصاريفه المرتبطة أيضًا.')) return;
+
+    // Delete linked expenses first to avoid dangling data.
+    const categoryById = projectExpenseCategory(projectId);
+    const { data: projectData } = await _supabase.from('projects').select('name').eq('id', projectId).maybeSingle();
+    const categoryByName = projectLegacyExpenseCategory(readText(projectData && projectData.name));
+
+    const { error: deleteExpensesError } = await _supabase
+        .from('expenses')
+        .delete()
+        .or(`category.eq.${categoryById},category.eq.${categoryByName}`);
+    if (deleteExpensesError) {
+        console.error(deleteExpensesError);
+        alert(`تعذر حذف مصاريف المشروع: ${readText(deleteExpensesError.message) || 'خطأ غير معروف'}`);
+        return;
+    }
+
+    const { error: deleteProjectError } = await _supabase.from('projects').delete().eq('id', projectId);
+    if (deleteProjectError) {
+        console.error(deleteProjectError);
+        alert(`تعذر حذف المشروع: ${readText(deleteProjectError.message) || 'خطأ غير معروف'}`);
+        return;
+    }
+
+    renderProjects();
+    renderExpenses();
+    renderTreasury();
+    updateDashboard();
+};
 
 window.openAddProjectExpenseModal = async (id) => {
     if (!canViewProfitAndCost()) {
