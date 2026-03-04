@@ -1759,7 +1759,50 @@ window.openUserModal = () => {
     const modal = document.getElementById('modal-container');
     const content = document.getElementById('modal-content');
     modal.classList.remove('hidden');
-    content.innerHTML = `<div class="p-8 bg-white text-right"><h3 class="text-2xl font-black mb-6">مستخدم جديد</h3><form id="u-form" class="space-y-4"><input type="text" id="u-name" placeholder="الاسم" class="w-full p-4 border rounded-xl" required><input type="password" id="u-pass" placeholder="كلمة المرور" class="w-full p-4 border rounded-xl" required><div class="p-4 border rounded-xl space-y-3"><p class="font-bold text-slate-700">صلاحيات الأقسام</p><label class="flex items-center gap-2"><input type="checkbox" value="sales" class="u-perm" checked> <span>المبيعات</span></label><label class="flex items-center gap-2"><input type="checkbox" value="purchases" class="u-perm"> <span>المشتريات</span></label><label class="flex items-center gap-2"><input type="checkbox" value="inventory" class="u-perm"> <span>المخزن</span></label><label class="flex items-center gap-2"><input type="checkbox" value="expenses" class="u-perm"> <span>المصاريف</span></label><label class="flex items-center gap-2"><input type="checkbox" value="treasury" class="u-perm"> <span>الخزينة</span></label><label class="flex items-center gap-2"><input type="checkbox" value="projects" class="u-perm"> <span>المشاريع</span></label><label class="flex items-center gap-2"><input type="checkbox" value="contracts" class="u-perm"> <span>العقود</span></label><label class="flex items-center gap-2"><input type="checkbox" value="returns" class="u-perm"> <span>المرتجعات</span></label><label class="flex items-center gap-2"><input type="checkbox" value="maintenance" class="u-perm"> <span>الصيانات</span></label></div><label class="flex items-center gap-2 p-4 border rounded-xl"><input type="checkbox" id="u-financials"> <span class="font-bold text-emerald-700">السماح بعرض الربح والتكلفة</span></label><button type="submit" class="w-full bg-slate-900 text-white py-4 rounded-xl">إنشاء</button></form></div>`;
+    content.innerHTML = `
+        <div class="p-4 md:p-6 bg-gradient-to-b from-slate-950 via-slate-900 to-black text-right text-white rounded-[2rem]">
+            <div class="flex items-center justify-between mb-5">
+                <div>
+                    <h3 class="text-2xl font-black tracking-tight">إضافة مستخدم</h3>
+                    <p class="text-slate-400 text-sm mt-1">إدارة وصول المستخدمين للنظام</p>
+                </div>
+                <div class="w-12 h-12 rounded-2xl bg-orange-500/20 border border-orange-400/40 text-orange-300 flex items-center justify-center">
+                    <i class="fas fa-user-plus text-lg"></i>
+                </div>
+            </div>
+
+            <form id="u-form" class="space-y-4">
+                <div class="bg-white/5 border border-white/10 rounded-2xl p-3">
+                    <input type="text" id="u-name" placeholder="اسم المستخدم" class="w-full p-3 rounded-xl bg-slate-900/80 border border-white/10 text-white placeholder:text-slate-400 focus:ring-2 focus:ring-orange-400 outline-none" required>
+                    <input type="password" id="u-pass" placeholder="كلمة المرور" class="w-full p-3 mt-3 rounded-xl bg-slate-900/80 border border-white/10 text-white placeholder:text-slate-400 focus:ring-2 focus:ring-orange-400 outline-none" required>
+                </div>
+
+                <div class="bg-white/5 border border-white/10 rounded-2xl p-4">
+                    <p class="font-bold text-orange-300 mb-3">صلاحيات الأقسام</p>
+                    <div class="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
+                        <label class="flex items-center gap-2 bg-slate-900/70 rounded-xl px-3 py-2"><input type="checkbox" value="sales" class="u-perm accent-orange-500" checked> <span>المبيعات</span></label>
+                        <label class="flex items-center gap-2 bg-slate-900/70 rounded-xl px-3 py-2"><input type="checkbox" value="purchases" class="u-perm accent-orange-500"> <span>المشتريات</span></label>
+                        <label class="flex items-center gap-2 bg-slate-900/70 rounded-xl px-3 py-2"><input type="checkbox" value="inventory" class="u-perm accent-orange-500"> <span>المخزن</span></label>
+                        <label class="flex items-center gap-2 bg-slate-900/70 rounded-xl px-3 py-2"><input type="checkbox" value="expenses" class="u-perm accent-orange-500"> <span>المصاريف</span></label>
+                        <label class="flex items-center gap-2 bg-slate-900/70 rounded-xl px-3 py-2"><input type="checkbox" value="treasury" class="u-perm accent-orange-500"> <span>الخزينة</span></label>
+                        <label class="flex items-center gap-2 bg-slate-900/70 rounded-xl px-3 py-2"><input type="checkbox" value="projects" class="u-perm accent-orange-500"> <span>المشاريع</span></label>
+                        <label class="flex items-center gap-2 bg-slate-900/70 rounded-xl px-3 py-2"><input type="checkbox" value="contracts" class="u-perm accent-orange-500"> <span>العقود</span></label>
+                        <label class="flex items-center gap-2 bg-slate-900/70 rounded-xl px-3 py-2"><input type="checkbox" value="returns" class="u-perm accent-orange-500"> <span>المرتجعات</span></label>
+                        <label class="flex items-center gap-2 bg-slate-900/70 rounded-xl px-3 py-2"><input type="checkbox" value="maintenance" class="u-perm accent-orange-500"> <span>الصيانات</span></label>
+                    </div>
+                </div>
+
+                <label class="flex items-center justify-between gap-3 bg-orange-500/10 border border-orange-400/30 rounded-2xl px-4 py-3">
+                    <span class="font-bold text-orange-200">السماح بعرض الربح والتكلفة</span>
+                    <input type="checkbox" id="u-financials" class="accent-orange-500 w-5 h-5">
+                </label>
+
+                <button type="submit" class="w-full bg-gradient-to-r from-orange-500 to-amber-500 text-black py-3.5 rounded-2xl font-black text-lg hover:brightness-110 transition">
+                    إنشاء المستخدم
+                </button>
+            </form>
+        </div>
+    `;
     document.getElementById('u-form').onsubmit = async (e) => {
         e.preventDefault();
         const username = document.getElementById('u-name').value.trim();
